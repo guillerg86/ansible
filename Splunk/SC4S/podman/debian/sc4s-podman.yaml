@@ -1,0 +1,53 @@
+--- 
+  - name: Configurar SC4S en podman
+    hosts: localhost
+    become: yes
+    tasks:
+      # Instalación de podman
+      - name: Instalar podman
+        apt:
+          name: podman
+          state: present
+      - name: Activar servicio podman
+        service:
+          name: podman
+          state: started
+          enabled: yes
+      # Creación del volumen
+      - name: Crear volumen splunk-sc4s
+        containers.podman.podman_volume:
+          name: splunk-sc4s-var
+          state: present
+      # Creacion de subdirectorios y ficheros de configuración
+      - name: Crear directorios de sc4s
+        ansible.builtin.file: 
+          path: "{{item}}"
+          state: directory
+        loop:
+          - /opt/sc4s
+          - /opt/sc4s/archive
+          - /opt/sc4s/local
+          - /opt/sc4s/tls
+      - name: Crear fichero configuración env_file
+        template:
+          src: sc4s_env_file.j2
+          dest: /opt/sc4s/env_file
+        register: env_file_conf
+      - name: Crear fichero de servicio SC4S
+        template:
+          src: sc4s_service.j2
+          dest: "/lib/systemd/system/sc4s.service"
+        register: sc4s_service_conf
+      - name: Ejecutar systemctl daemon-reload
+        command: systemctl daemon-reload
+        when: sc4s_service_conf.changed
+      - name: Reiniciar servicio SC4S
+        service:
+          name: sc4s
+          state: restarted
+        when: env_file_conf.changed 
+      - name: Activar servicio SC4S
+        service:
+          name: sc4s
+          state: started
+          enabled: yes
